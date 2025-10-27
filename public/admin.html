@@ -1,0 +1,107 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin - Anonimo Store</title>
+  <style>
+    body{font-family:Arial;margin:16px}
+    input,textarea{width:100%;padding:8px;margin:6px 0}
+    button{padding:8px 12px;margin:6px 0}
+    .card{background:#fafafa;padding:12px;border-radius:8px;margin-bottom:12px}
+  </style>
+</head>
+<body>
+  <h2>Admin - Anonimo Store</h2>
+  <div>
+    <label>Senha admin</label>
+    <input id="adminPass" type="password" placeholder="Senha">
+    <button onclick="loadPacks()">Entrar</button>
+  </div>
+  <hr>
+  <div>
+    <h3>Criar Pack</h3>
+    <input id="p_name" placeholder="Nome">
+    <input id="p_price" placeholder="Preço em centavos (ex: 1290 = R$12,90)">
+    <input id="p_image" placeholder="URL imagem (opcional)">
+    <textarea id="p_desc" placeholder="Descrição"></textarea>
+    <textarea id="p_content" placeholder="Link ou texto do conteúdo (workupload etc)"></textarea>
+    <button onclick="createPack()">Criar</button>
+  </div>
+  <hr>
+  <div>
+    <h3>Packs</h3>
+    <div id="packsList"></div>
+  </div>
+  <hr>
+  <div>
+    <h3>Pedidos</h3>
+    <div id="ordersList"></div>
+  </div>
+
+<script>
+function authHeaders(){ return { 'x-admin-pass': document.getElementById('adminPass').value }; }
+
+async function loadPacks(){
+  try{
+    const res = await fetch('/admin/api/packs', { headers: authHeaders() });
+    if(res.status === 401){ alert('Senha inválida'); return; }
+    const packs = await res.json();
+    const container = document.getElementById('packsList');
+    container.innerHTML = '';
+    packs.forEach(p=>{
+      const el = document.createElement('div');
+      el.className='card';
+      el.innerHTML = `<b>${p.name}</b> - R$ ${(p.price/100).toFixed(2).replace('.',',')}<div><small>${p.description || ''}</small></div>
+      <div style="margin-top:8px">
+        <button onclick='editPack(${JSON.stringify(p).replaceAll("'", "\\'")})'>Editar</button>
+        <button onclick="deletePack(${p.id})">Apagar</button>
+      </div>`;
+      container.appendChild(el);
+    });
+    loadOrders();
+  }catch(e){ console.error(e); alert('Erro ao carregar packs'); }
+}
+
+function editPack(p){
+  const name = prompt('Nome', p.name);
+  if(name === null) return;
+  const price = prompt('Preço em centavos', p.price);
+  const description = prompt('Descrição', p.description || '');
+  const content = prompt('Conteúdo (link/texto)', p.content || '');
+  const image = prompt('URL imagem', p.image || '');
+  fetch(`/admin/api/packs/${p.id}`, {
+    method:'PUT',
+    headers: { 'Content-Type':'application/json', ...authHeaders() },
+    body: JSON.stringify({ name, price: Number(price), description, content, image })
+  }).then(()=>loadPacks());
+}
+
+function deletePack(id){
+  if(!confirm('Apagar pack?')) return;
+  fetch(`/admin/api/packs/${id}`, { method:'DELETE', headers: authHeaders() }).then(()=>loadPacks());
+}
+
+function createPack(){
+  const name = document.getElementById('p_name').value;
+  const price = Number(document.getElementById('p_price').value);
+  const image = document.getElementById('p_image').value;
+  const description = document.getElementById('p_desc').value;
+  const content = document.getElementById('p_content').value;
+  fetch('/admin/api/packs', {
+    method:'POST',
+    headers: { 'Content-Type':'application/json', ...authHeaders() },
+    body: JSON.stringify({ name, price, image, description, content })
+  }).then(()=>{ document.getElementById('p_name').value=''; loadPacks(); });
+}
+
+async function loadOrders(){
+  const el = document.getElementById('ordersList');
+  const res = await fetch('/admin/api/orders', { headers: authHeaders() });
+  if(res.status === 401){ el.innerHTML = 'Senha inválida para pedidos'; return; }
+  const orders = await res.json();
+  el.innerHTML = orders.map(o => `<div class="card"><b>Pedido #${o.id}</b> - ${o.pack_name || 'pack'} - ${o.customer_name} - ${o.customer_email} - <b>${o.status}</b><div>PIX: <pre>${o.pix_qr || ''}</pre></div></div>`).join('');
+}
+</script>
+</body>
+</html>
