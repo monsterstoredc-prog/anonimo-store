@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Anonimo Store</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:16px;background:#f5f5f5}
+    .pack{background:#fff;border-radius:8px;padding:12px;margin-bottom:12px;box-shadow:0 2px 6px rgba(0,0,0,0.06)}
+    .row{display:flex;gap:12px;align-items:center}
+    img{width:120px;height:80px;object-fit:cover;border-radius:6px}
+    button{background:#111;color:#fff;border:0;padding:8px 12px;border-radius:6px}
+    input{width:100%;padding:8px;margin:6px 0}
+  </style>
+</head>
+<body>
+  <h2>Anonimo Store</h2>
+  <div id="packs"></div>
+
+  <div id="checkout" style="display:none">
+    <h3>Checkout</h3>
+    <div id="selectedPack"></div>
+    <input id="name" placeholder="Seu nome">
+    <input id="email" placeholder="Seu email">
+    <button id="payBtn">Gerar PIX</button>
+    <div id="paymentInfo"></div>
+  </div>
+
+<script>
+async function loadPacks(){
+  const res = await fetch('/api/packs');
+  const packs = await res.json();
+  const container = document.getElementById('packs');
+  container.innerHTML = '';
+  packs.forEach(p => {
+    const el = document.createElement('div');
+    el.className='pack';
+    el.innerHTML = `
+      <div class="row">
+        <img src="${p.image || 'https://via.placeholder.com/300x120?text=Pack'}">
+        <div style="flex:1">
+          <h3>${p.name}</h3>
+          <p>${p.description || ''}</p>
+          <p><b>R$ ${ (p.price/100).toFixed(2).replace('.',',') }</b></p>
+          <button onclick="startCheckout(${p.id})">Comprar</button>
+        </div>
+      </div>
+    `;
+    container.appendChild(el);
+  });
+}
+function startCheckout(packId){
+  window.selectedPackId = packId;
+  document.getElementById('checkout').style.display='block';
+  fetch(`/api/packs/${packId}`).then(r=>r.json()).then(p=>{
+    document.getElementById('selectedPack').innerHTML = `<strong>${p.name}</strong> - R$ ${(p.price/100).toFixed(2).replace('.',',')}`;
+  }).catch(()=>{});
+}
+document.getElementById('payBtn').addEventListener('click', async ()=>{
+  const name = document.getElementById('name').value.trim();
+  const email = document.getElementById('email').value.trim();
+  if(!name || !email){ alert('Preencha nome e email'); return; }
+  const res = await fetch('/api/orders', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ pack_id: window.selectedPackId, customer_name: name, customer_email: email })
+  });
+  const data = await res.json();
+  if(data.error) return alert(data.error);
+  document.getElementById('paymentInfo').innerHTML = `
+    <p>Pedido #${data.orderId} - Valor R$ ${(data.amount/100).toFixed(2).replace('.',',')}</p>
+    <p>PIX (simulado):</p>
+    <pre style="background:#eee;padding:8px;border-radius:6px">${data.pixQr}</pre>
+    <p>Após confirmação automática (Sunize) o conteúdo será entregue no email informado.</p>
+  `;
+});
+loadPacks();
+</script>
+</body>
+</html>
